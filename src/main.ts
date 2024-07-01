@@ -64,6 +64,7 @@ export class RequestInterceptionManager {
   interceptions: Map<string, InterceptionWithUrlPatternRegExp> = new Map()
   #client: CDPSession
   #requestPausedHandler: (event: Protocol.Fetch.RequestPausedEvent) => void
+  #authRequiredHandler: (event: Protocol.Fetch.AuthRequiredEvent) => void
   #isInstalled = false
 
   // eslint-disable-next-line no-console
@@ -71,6 +72,8 @@ export class RequestInterceptionManager {
     this.#client = client
     this.#requestPausedHandler = (event: Protocol.Fetch.RequestPausedEvent) =>
       void this.onRequestPausedEvent(event).catch(onError)
+    this.#authRequiredHandler = (event: Protocol.Fetch.AuthRequiredEvent) =>
+      void this.onAuthRequiredEvent(event).catch(onError)
   }
 
   async intercept(...interceptions: Interception[]) {
@@ -93,7 +96,7 @@ export class RequestInterceptionManager {
   async enable(): Promise<void> {
     this.#install()
     return this.#client.send('Fetch.enable', {
-      handleAuthRequests: false,
+      handleAuthRequests: true,
       patterns: [...this.interceptions.values()].map(
         ({ modifyRequest, modifyResponse, ...config }) =>
           ({
@@ -116,6 +119,10 @@ export class RequestInterceptionManager {
   async clear() {
     this.interceptions.clear()
     await this.disable()
+  }
+
+  onAuthRequiredEvent = async (event: Protocol.Fetch.AuthRequiredEvent) => {
+    console.log(event);
   }
 
   onRequestPausedEvent = async (event: Protocol.Fetch.RequestPausedEvent) => {
@@ -219,6 +226,7 @@ export class RequestInterceptionManager {
     if (this.#isInstalled) return
 
     this.#client.on('Fetch.requestPaused', this.#requestPausedHandler)
+    this.#client.on('Fetch.authRequired', this.#authRequiredHandler)
     this.#isInstalled = true
   }
 
@@ -226,6 +234,7 @@ export class RequestInterceptionManager {
     if (!this.#isInstalled) return
 
     this.#client.off('Fetch.requestPaused', this.#requestPausedHandler)
+    this.#client.off('Fetch.authRequired', this.#authRequiredHandler)
     this.#isInstalled = false
   }
 
